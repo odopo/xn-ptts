@@ -1,6 +1,7 @@
 package ai.gradium.phonon.smoke
 
 import android.app.Activity
+import android.os.Build
 import android.os.Bundle
 import android.media.AudioAttributes
 import android.media.AudioFormat
@@ -16,7 +17,13 @@ class MainActivity : Activity() {
     @Volatile private var tts: PhononTTS? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val status = TextView(this).apply { text = "Put the exported model in ${getExternalFilesDir(null)}/model, then speak." }
+        val targetSoc = intent.getStringExtra("soc_model")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: Build.SOC_MODEL.uppercase()
+        val status = TextView(this).apply {
+            text = "Put the exported model in ${getExternalFilesDir(null)}/model, then speak. Target SoC: $targetSoc"
+        }
         val speak = Button(this).apply { text = "Speak" }
         val stop = Button(this).apply { text = "Stop"; setOnClickListener { tts?.stop() } }
         val layout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; addView(status); addView(speak); addView(stop) }
@@ -24,7 +31,7 @@ class MainActivity : Activity() {
         if (intent.getBooleanExtra("probe", false)) {
             Thread {
                 try {
-                    PhononTTS.load(this, File(filesDir, "missing-model"), "none").close()
+                    PhononTTS.load(this, File(filesDir, "missing-model"), "none", targetSoc).close()
                     error("Missing model unexpectedly loaded")
                 } catch (e: IllegalStateException) {
                     if (e.message?.contains("metadata.json") == true) android.util.Log.i("PhononSmoke", "JNI_PROBE_OK")
@@ -36,7 +43,7 @@ class MainActivity : Activity() {
             speak.isEnabled = false
             Thread {
                 try {
-                    val model = PhononTTS.load(this, File(getExternalFilesDir(null), "model"), "en")
+                    val model = PhononTTS.load(this, File(getExternalFilesDir(null), "model"), "en", targetSoc)
                     model.use {
                         tts = model
                         val format = AudioFormat.Builder().setSampleRate(model.sampleRate).setEncoding(AudioFormat.ENCODING_PCM_FLOAT).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build()
@@ -52,8 +59,7 @@ class MainActivity : Activity() {
                                 }
                                 true
                             }
-                            runOnUiThread { status.text = "QNN HTP: $result" }
-                            // Let the last queued frame play before releasing AudioTrack.
+                            runOnUiThread { status.text = "QNN HTP: $result | SoC: $targetSoc" }
                             val deadline = android.os.SystemClock.elapsedRealtime() + 2000
                             while (!result.cancelled && track.playbackHeadPosition.toLong() < result.samples &&
                                 !isFinishing && !isDestroyed && android.os.SystemClock.elapsedRealtime() < deadline) {
