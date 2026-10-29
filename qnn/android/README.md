@@ -75,6 +75,17 @@ val result = tts.speak("Hello from Phonon.") { pcm ->
 tts.close()
 ```
 
+For bundle validation against a specific SoC, the app can also pass an explicit target string:
+
+```kotlin
+val tts = PhononTTS.load(context, File(modelDirectory), "en", "SM8845")
+```
+
+This is useful when testing a target-specific QNN bundle on a Snapdragon SM8845 device or when
+`Build.SOC_MODEL` differs from the exact metadata string used when the bundle was compiled. The
+bundle metadata still determines whether the selected context binary is actually compatible with the
+phone and runtime.
+
 Supported normalization choices are `en`, `fr`, `de`, `es`, `pt` and `none`. The language is
 required. Callback exceptions propagate, and the model remains reusable after cancellation
 or callback failure. Concurrent generation and closing during generation are rejected.
@@ -90,6 +101,19 @@ voice catalog. From 0.5.0 it also holds one for the SC8380XP (Snapdragon X Elite
 were built with QAIRT 2.50 and do not load on an older QNN runtime. For another model, such
 as one of the gated Phonon 40m models, build a bundle with the export tools below. They
 compile on Qualcomm AI Hub, so they need an AI Hub account.
+
+For an SM8845 device, generate or verify a bundle whose `metadata.json` includes the exact
+SOC string used by the phone, for example:
+
+```json
+{
+  "Galaxy S25": {"file": "phonon.bin", "soc_models": ["SM8845"]}
+}
+```
+
+The Android loader matches `Build.SOC_MODEL` exactly, after converting it to uppercase. Only
+list targets whose correctness and performance have been verified. Existing test bundles need
+this metadata added before using the Android library.
 
 A bundle holds `metadata.json`, a tokenizer, BOS data, voices and compiled context binaries.
 These are exported model assets, not raw safetensors or GGUF checkpoints.
